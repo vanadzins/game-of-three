@@ -1,0 +1,144 @@
+<html>
+<head>
+    <title>Chat WebSocket</title>
+    <script src="./js/sockjs-0.3.4.js"></script>
+    <script src="./js/stomp.js"></script>
+    <script type="text/javascript">
+            var stompClient = null;
+            var mode = false;
+            let sessionId;
+
+            function setMode() {
+                mode = !mode;
+                updateMode(mode)
+            }
+
+            function enableAddition() {
+                document.getElementById('minusOne').disabled = false;
+                document.getElementById('zero').disabled = false;
+                document.getElementById('plusOne').disabled = false;
+            }
+
+            function disableAddition() {
+                document.getElementById('minusOne').disabled = true;
+                document.getElementById('zero').disabled = true;
+                document.getElementById('plusOne').disabled = true;
+            }
+
+            function enable(connected) {
+                document.getElementById('connect').disabled = connected;
+                document.getElementById('disconnect').disabled = !connected;
+                document.getElementById('start').disabled = !connected;
+            }
+
+            function connect() {
+                var socket = new SockJS('/stomp');
+                stompClient = Stomp.over(socket);
+                stompClient.connect({}, function(frame) {
+                    sessionId = /\/([^\/]+)\/websocket/.exec(socket._transport.url)[1];
+                    enable(true);
+                    document.getElementById('mode').disabled = false;
+                    console.log('Connected: ' + frame);
+                    stompClient.subscribe('/user/queue/result', function(messageOutput) {
+                        showMessageOutput(JSON.parse(messageOutput.body));
+                    });
+                });
+            }
+
+            function disconnect() {
+                if(stompClient != null) {
+                    stompClient.disconnect();
+                    enable(false);
+                }
+                console.log("Disconnected");
+            }
+
+            function start() {
+                stompClient.send("/start", {},
+                  JSON.stringify(document.getElementById('number').value)
+                );
+            }
+
+            function addition(addition) {
+                stompClient.send("/addition", {},
+                  JSON.stringify({
+                    'addition':addition
+                  }));
+            }
+
+            function showMessageOutput(messageOutput) {
+                var text;
+
+                switch(messageOutput.status) {
+                    case 0:
+                        document.getElementById('mode').disabled = true;
+                    case 1:
+                        enableAddition();
+                        text = messageOutput.message;
+                        break;
+                    case 2:
+                        disableAddition();
+                        document.getElementById('mode').disabled = false;
+                    case 3:
+                        text = messageOutput.message;
+                        break;
+                    default:
+                        text = "Unknown status";
+
+                }
+                var response = document.getElementById('response');
+                var p = document.createElement('p');
+                p.style.wordWrap = 'break-word';
+                p.appendChild(document.createTextNode(text));
+                response.appendChild(p);
+            }
+
+            async function updateMode() {
+                try {
+                    const config = {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            'sessionId': sessionId,
+                            'automatic': mode
+                        })
+                    }
+                    const response = await fetch('http://localhost:8080/mode', config)
+                    //const json = await response.json()
+                    if (response.ok) {
+                        //return json
+                        return response
+                    } else {
+                        //
+                    }
+                } catch (error) {
+                        //
+                }
+            }
+        </script>
+</head>
+<body onload="disconnect()">
+<div>
+    <div>
+        <input type="checkbox" id="mode" value="false" onclick="setMode()" disabled="disabled">Automatic mode<br><br>
+        <button id="connect" onclick="connect()">Connect</button>
+        <button id="disconnect" onclick="disconnect()" disabled="disabled">Disconnect</button><br><br>
+        <div>Insert a number > 2:</div>
+        <input type="number" min="2" id="number" value="2"><br><br>
+        <button id="start" onclick="start()" disabled="disabled">Start new game</button>
+
+    </div>
+    <br />
+    <div id="conversationDiv">
+        <button id="minusOne" onclick="addition(-1)" disabled="disabled">-1</button>
+        <button id="zero" onclick="addition(0)" disabled="disabled">0</button>
+        <button id="plusOne" onclick="addition(1)" disabled="disabled">+1</button>
+        <p id="response"></p>
+    </div>
+</div>
+
+</body>
+</html>
